@@ -8,6 +8,7 @@ type TextScrollOptions = {
   fontSize?: number;
   speed_x?: number;
   speed_y?: number;
+  timeBeforeScroll?: number;
 };
 
 export class TextScroll extends EventEmitter {
@@ -60,6 +61,20 @@ export class TextScroll extends EventEmitter {
     }
   }
 
+  private isMatrixInBox(xOffset: number, yOffset: number) {
+    const xMin = Math.round(xOffset);
+    const yMin = Math.round(yOffset);
+    const xMax = xMin + this.matrixWidth;
+    const yMax = yMin + this.matrixHeight;
+
+    return (
+      xMin < this.options.box.width &&
+      xMax >= 0 &&
+      yMin < this.options.box.height &&
+      yMax >= 0
+    );
+  }
+
   async waitXMs(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
@@ -67,20 +82,30 @@ export class TextScroll extends EventEmitter {
   async scroll() {
     const speed_x = this.options.speed_x ?? 1; // per sec
     const speed_y = this.options.speed_y ?? 0; // per sec
+    const timeBeforeScroll = this.options.timeBeforeScroll ?? 1000;
 
     const start_x = 0;
     const start_y = 0;
-    const dest_x = start_x + Math.sign(speed_x) * this.options.box.width;
-    const dest_y = start_y + Math.sign(speed_y) * this.options.box.height;
+    const dest_x =
+      start_x +
+      Math.sign(speed_x) * Math.max(this.options.box.width, this.matrixWidth);
+    const dest_y =
+      start_y +
+      Math.sign(speed_y) * Math.max(this.options.box.height, this.matrixHeight);
     let current_x = start_x;
     let current_y = start_y;
 
-    this.applyMatrixToBox(current_x, current_y);
-    this.emit("render", this.boxMatrix);
-    await this.waitXMs(1000); // wait 1 sec
+    if (timeBeforeScroll && this.isMatrixInBox(current_x, current_y)) {
+      this.applyMatrixToBox(current_x, current_y);
+      this.emit("render", this.boxMatrix);
+      await this.waitXMs(timeBeforeScroll);
+    }
 
     const scrollP = new Promise<void>((resolve) => {
-      const interval_time = Math.min(1 / speed_x, 1 / speed_y);
+      const interval_time = Math.min(
+        1 / Math.abs(speed_x),
+        1 / Math.abs(speed_y)
+      );
       const interval = setInterval(async () => {
         this.applyMatrixToBox(current_x, current_y);
         this.emit("render", this.boxMatrix);
