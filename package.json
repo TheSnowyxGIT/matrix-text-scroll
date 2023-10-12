@@ -1,6 +1,6 @@
 {
   "name": "matrix-text-scroll",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Generate dynamic, customizable pixel matrices for smooth text scrolling effects across LED displays with PixelFlowJS. 🚀💡 Transform your messages into visually appealing light movements effortlessly!",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
