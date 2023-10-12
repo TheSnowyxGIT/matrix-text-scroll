@@ -1,126 +1,130 @@
-import { EventEmitter } from "events";
 import { Font, text2matrix } from "text2matrix";
 
-type TextScrollOptions = {
+type ApplyMatrixOption = {
+  duplicate?: boolean;
+  duplicate_width?: number;
+};
+
+function applyMatrix(
+  point: { x: number; y: number },
+  matrix: number[][],
+  box: number[][],
+  options: ApplyMatrixOption = {}
+) {
+  const duplicate = options.duplicate ?? false;
+  const duplicate_width = options.duplicate_width ?? 1;
+
+  const sx = Math.round(point.x);
+  const sy = Math.round(point.y);
+  box.forEach((row) => {
+    row.fill(0);
+  });
+
+  for (let y = 0; y < matrix.length; y++) {
+    let x = 0;
+    while (x < matrix[0].length) {
+      const boxX = x + sx;
+      const boxY = y + sy;
+      if (boxX >= 0 && boxX < box[0].length && boxY >= 0 && boxY < box.length) {
+        box[boxY][boxX] = matrix[y][x];
+      }
+      x += 1;
+    }
+    if (duplicate) {
+      let base = sx + matrix[0].length + duplicate_width;
+      x = base;
+      while (x < box[0].length) {
+        let index = x - base;
+        const boxY = y + sy;
+        if (x >= 0 && boxY >= 0 && boxY < box.length) {
+          box[boxY][x] = matrix[y][index];
+        }
+        if (index === matrix[0].length - 1) {
+          base += matrix[0].length + duplicate_width;
+          x += duplicate_width;
+        }
+        x += 1;
+      }
+      base = sx - duplicate_width - matrix[0].length;
+      x = base + matrix[0].length;
+      while (x >= 0) {
+        const index = x - base;
+        const boxY = y + sy;
+        if (x >= 0 && boxY >= 0 && boxY < box.length) {
+          box[boxY][x] = matrix[y][index];
+        }
+        if (x === base) {
+          base -= matrix[0].length + duplicate_width;
+          x -= duplicate_width;
+        }
+        x -= 1;
+      }
+    }
+  }
+}
+
+type InfiniteResult = {
+  waitEnd: () => Promise<void>;
+  requestStop: () => void;
+};
+
+type InfiniteScrollOptions = {
   font: Font;
   box: { width: number; height: number };
   letterSpacing?: number;
   fontSize?: number;
   speed_x?: number;
-  speed_y?: number;
-  timeBeforeScroll?: number;
+  sep_width?: number;
 };
+export function infiniteScroll(
+  text: string,
+  fn: (matrix: number[][]) => void,
+  options: InfiniteScrollOptions
+): InfiniteResult {
+  const speed_x = options.speed_x ?? -10;
+  const sep_width = options.sep_width ?? 2;
+  const matrix = text2matrix(text, options.font, {
+    letterSpacing: options.letterSpacing,
+    fontSize: options.fontSize,
+  });
+  const matrixWidth = matrix[0].length;
+  const boxMatrix = Array.from<number[]>({ length: options.box.height })
+    .fill([])
+    .map(() => Array.from<number>({ length: options.box.width }).fill(0));
 
-export class TextScroll extends EventEmitter {
-  private matrix: number[][];
-  private matrixWidth: number;
-  private matrixHeight: number;
-  private boxMatrix: number[][];
-  constructor(private text: string, private options: TextScrollOptions) {
-    super();
-    this.matrix = text2matrix(this.text, this.options.font, {
-      letterSpacing: this.options.letterSpacing,
-      fontSize: this.options.fontSize,
-    });
-    if (this.matrix.length === 0 || this.matrix[0].length === 0) {
-      throw new Error("Invalid text to scroll");
-    }
-    this.matrixWidth = this.matrix[0].length;
-    this.matrixHeight = this.matrix.length;
+  let restart_x = Math.sign(speed_x) < 0 ? 0 : -matrixWidth + options.box.width;
+  let current_x = 0;
+  let y = 0;
+  let stopAsked = false;
+  const loopP = new Promise<void>((resolve) => {
+    const interval_time = 1 / Math.abs(speed_x);
+    const interval = setInterval(async () => {
+      applyMatrix({ x: current_x, y }, matrix, boxMatrix, {
+        duplicate: true,
+        duplicate_width: sep_width,
+      });
+      fn(boxMatrix);
 
-    this.boxMatrix = Array.from<number[]>({ length: this.options.box.height })
-      .fill([])
-      .map(() =>
-        Array.from<number>({ length: this.options.box.width }).fill(0)
-      );
-  }
-
-  private applyMatrixToBox(xOffset: number, yOffset: number) {
-    xOffset = Math.round(xOffset);
-    yOffset = Math.round(yOffset);
-    // clear box
-    for (let y = 0; y < this.options.box.height; y++) {
-      for (let x = 0; x < this.options.box.width; x++) {
-        this.boxMatrix[y][x] = 0;
+      current_x = current_x + speed_x * interval_time;
+      if (
+        current_x - sep_width >= options.box.width ||
+        current_x + sep_width <= -matrixWidth
+      ) {
+        current_x = restart_x;
       }
-    }
-    // apply matrix
-    for (let y = 0; y < this.matrixHeight; y++) {
-      for (let x = 0; x < this.matrixWidth; x++) {
-        const boxX = x + xOffset;
-        const boxY = y + yOffset;
-        if (
-          boxX >= 0 &&
-          boxX < this.options.box.width &&
-          boxY >= 0 &&
-          boxY < this.options.box.height
-        ) {
-          this.boxMatrix[boxY][boxX] = this.matrix[y][x];
-        }
+      if (stopAsked) {
+        clearInterval(interval);
+        resolve();
       }
-    }
-  }
+    }, interval_time * 1000);
+  });
 
-  private isMatrixInBox(xOffset: number, yOffset: number) {
-    const xMin = Math.round(xOffset);
-    const yMin = Math.round(yOffset);
-    const xMax = xMin + this.matrixWidth;
-    const yMax = yMin + this.matrixHeight;
-
-    return (
-      xMin < this.options.box.width &&
-      xMax >= 0 &&
-      yMin < this.options.box.height &&
-      yMax >= 0
-    );
-  }
-
-  async waitXMs(ms: number) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async scroll() {
-    const speed_x = this.options.speed_x ?? 1; // per sec
-    const speed_y = this.options.speed_y ?? 0; // per sec
-    const timeBeforeScroll = this.options.timeBeforeScroll ?? 1000;
-
-    const start_x = 0;
-    const start_y = 0;
-    const dest_x =
-      start_x +
-      Math.sign(speed_x) * Math.max(this.options.box.width, this.matrixWidth);
-    const dest_y =
-      start_y +
-      Math.sign(speed_y) * Math.max(this.options.box.height, this.matrixHeight);
-    let current_x = start_x;
-    let current_y = start_y;
-
-    if (timeBeforeScroll && this.isMatrixInBox(current_x, current_y)) {
-      this.applyMatrixToBox(current_x, current_y);
-      this.emit("render", this.boxMatrix);
-      await this.waitXMs(timeBeforeScroll);
-    }
-
-    const scrollP = new Promise<void>((resolve) => {
-      const interval_time = Math.min(
-        1 / Math.abs(speed_x),
-        1 / Math.abs(speed_y)
-      );
-      const interval = setInterval(async () => {
-        this.applyMatrixToBox(current_x, current_y);
-        this.emit("render", this.boxMatrix);
-
-        if (current_x === dest_x && current_y === dest_y) {
-          clearInterval(interval);
-          resolve();
-        }
-
-        current_x = current_x + speed_x * interval_time;
-        current_y = current_y + speed_y * interval_time;
-        current_x = speed_x * (current_x - dest_x) >= 0 ? dest_x : current_x;
-        current_y = speed_y * (current_y - dest_y) >= 0 ? dest_y : current_y;
-      }, interval_time * 1000);
-    });
-    await scrollP;
-  }
+  return {
+    waitEnd: async () => {
+      await loopP;
+    },
+    requestStop: () => {
+      stopAsked = true;
+    },
+  };
 }
