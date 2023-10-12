@@ -1,0 +1,39 @@
+{
+  "name": "matrix-text-scroll",
+  "version": "1.0.0",
+  "description": "Generate dynamic, customizable pixel matrices for smooth text scrolling effects across LED displays with PixelFlowJS. 🚀💡 Transform your messages into visually appealing light movements effortlessly!",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "release": "changeset publish"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheSnowyxGIT/matrix-text-scroll.git"
+  },
+  "keywords": [
+    "text-scrolling",
+    "marquee",
+    "pixel-matrix",
+    "scrolling-message",
+    "matrix-animation",
+    "LED-text"
+  ],
+  "author": "adrienpgd",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/TheSnowyxGIT/matrix-text-scroll/issues"
+  },
+  "homepage": "https://github.com/TheSnowyxGIT/matrix-text-scroll#readme",
+  "peerDependencies": {
+    "text2matrix": ">=1.1.7"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.26.2",
+    "@types/node": "^20.8.4"
+  }
+}
